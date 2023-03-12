@@ -67,7 +67,7 @@ if __name__ == '__main__':
     x1line, y1line = 277, 384
     x2line, y2line = 437, 348
 
-    fn = "1"
+    fn = "30"
     video_path = os.path.join("data_test", f"{fn}.mp4")
     video_out_path = os.path.join("output", f"{fn}_ann.mp4")
     model_path = os.path.join("ann_mod", "best_b4e54.pt")
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     device = "cpu"
     imgsz = 640
 
-    GOFILE = False
+    GOFILE = True
 
     # Load model
     model = attempt_load(model_path, map_location=device)  # load FP32 model
@@ -87,8 +87,11 @@ if __name__ == '__main__':
     cap = cv2.VideoCapture(video_path)
     ret, frame = cap.read()
 
-    cap_out = cv2.VideoWriter(video_out_path, cv2.VideoWriter_fourcc(*'mp4v'),
-                              cap.get(cv2.CAP_PROP_FPS), (frame.shape[1], frame.shape[0]))
+    if GOFILE:
+        cap_out = cv2.VideoWriter(video_out_path, cv2.VideoWriter_fourcc(*'mp4v'),
+                                  cap.get(cv2.CAP_PROP_FPS), (frame.shape[1], frame.shape[0]))
+    else:
+        cap_out = None
 
     tracker_people = Tracker(track_model_path)
     itt = 0
@@ -96,7 +99,7 @@ if __name__ == '__main__':
     while ret:
         itt += 1
         print(itt)
-        if itt > 80:
+        if itt > 0:
             pred, img_new = model_predict(frame)
             pred = non_max_suppression(pred)
 
