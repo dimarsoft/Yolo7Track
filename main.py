@@ -1,12 +1,15 @@
 import os
 import cv2
 import torch
+import argparse
+from pathlib import Path
 # from random import random as rnd_v
 from random import randrange
 from models.experimental import attempt_load
 from utils.general import check_img_size, non_max_suppression, scale_coords
 import numpy as np
 from tracker import Tracker
+
 
 def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
     # Resize and pad image while meeting stride-multiple constraints
@@ -40,8 +43,9 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
     return img, ratio, (dw, dh)
 
-def model_predict(frame):
 
+# , device, model
+def model_predict(frame, device, model):
     img, _, _ = letterbox(frame)
 
     # Convert
@@ -58,20 +62,26 @@ def model_predict(frame):
         pred = model(img)[0]
     return pred, img
 
+
 def get_centrmass(p1, p2):
-    res = ( int((p2[0] + p1[0])/2), int(p2[1] + 0.35 * (p1[1] - p2[1])) )
+    res = (int((p2[0] + p1[0]) / 2), int(p2[1] + 0.35 * (p1[1] - p2[1])))
     return res
 
-if __name__ == '__main__':
 
+def run(video_in, video_out, model, track_model):
     x1line, y1line = 277, 384
     x2line, y2line = 437, 348
 
     fn = "30"
-    video_path = os.path.join("data_test", f"{fn}.mp4")
-    video_out_path = os.path.join("output", f"{fn}_ann.mp4")
-    model_path = os.path.join("ann_mod", "best_b4e54.pt")
-    track_model_path = os.path.join("ann_mod", "mars-small128.pb")
+    video_path = video_in  # os.path.join("data_test", f"{fn}.mp4")
+    video_out_path = video_out  # os.path.join("output", f"{fn}_ann.mp4")
+    model_path = model  # os.path.join("ann_mod", "best_b4e54.pt")
+    track_model_path = track_model  # os.path.join("ann_mod", "mars-small128.pb")
+
+    # video_path = os.path.join("d:\\AI\\2023\\corridors\\dataset-v1.1\\test\\", f"{fn}.mp4")
+    # video_out_path = os.path.join("output", f"{fn}_ann.mp4")
+    # model_path = os.path.join("ann_mod", "best_b4e54.pt")
+    # track_model_path = os.path.join("ann_mod", "mars-small128.pb")
     device = "cpu"
     imgsz = 640
 
@@ -100,7 +110,7 @@ if __name__ == '__main__':
         itt += 1
         print(itt)
         if itt > 0:
-            pred, img_new = model_predict(frame)
+            pred, img_new = model_predict(frame, device, model)
             pred = non_max_suppression(pred)
 
             detection = []
@@ -151,3 +161,30 @@ if __name__ == '__main__':
     else:
         cap.release()
         cv2.destroyAllWindows()
+
+
+def parse_opt():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--video_in', type=Path, help='model.pt path(s)')
+    parser.add_argument('--video_out', type=Path)
+    parser.add_argument('--model', type=Path, help='model.pt path(s)')
+    parser.add_argument('--track_model', type=Path)
+    opt = parser.parse_args()
+    # print_args(vars(opt))
+    return opt
+
+
+def main(opt):
+    # run(**vars(opt))
+    model = "D:\\AI\\2023\\models\\Yolov7\\25.02.2023_dataset_1.1_yolov7_best.pt"
+    src_video_path = "d:\\AI\\2023\\corridors\\dataset-v1.1\\test\\1.mp4"
+    output_video_path = "D:\\AI\\2023\\Track\\Sort\\"
+
+    track_model = "D:\\AI\\2023\\Github\\y7\\Yolo7Track\\ann_mod\\mars-small128.pb"
+
+    run(src_video_path, output_video_path, model, track_model)
+
+
+if __name__ == "__main__":
+    opt = parse_opt()
+    main(opt)
