@@ -4,7 +4,7 @@ import json
 from random import randrange
 from models.experimental import attempt_load
 from utils.general import non_max_suppression, scale_coords
-from functions import model_predict, get_centrmass, crossing_bound, calc_inp_outp_people
+from functions import model_predict, get_centrmass, crossing_bound, calc_inp_outp_people, process_filt
 from tracker import Tracker
 import multiprocessing
 # from tqdm import tqdm
@@ -22,37 +22,6 @@ def model_init(model_path, config):
     # imgsz = check_img_size(imgsz, s=stride)  # check img_size
     return model
 
-def process_filt(people_tracks):
-    max_id = max([int(idv) for idv in people_tracks.keys()])
-    max_id += 1
-    res = {}
-    max_delt = 5 # frame
-    for pk in people_tracks.keys():
-        path = people_tracks[pk]["path"]
-        frid = people_tracks[pk]["frid"]
-        bbox = people_tracks[pk]["bbox"]
-        new_path = {"path": [path[0]], "frid": [frid[0]], "bbox": [bbox[0]]}
-        for i in range(1, len(frid)):
-            if frid[i] - frid[i-1] > max_delt and len(new_path) > 1:
-                if str(pk) in res.keys():
-                    new_id = str(max_id)
-                    max_id += 1
-                else:
-                    new_id = str(pk)
-                res.update({new_id: new_path})
-                new_path = {"path": [path[i]], "frid": [frid[i]], "bbox": [bbox[i]]}
-            else:
-                new_path["path"].append(path[i])
-                new_path["frid"].append(frid[i])
-                new_path["bbox"].append(bbox[i])
-        if len(new_path) > 1:
-            if str(pk) in res.keys():
-                new_id = str(max_id)
-                max_id += 1
-            else:
-                new_id = str(pk)
-            res.update({new_id: new_path})
-    return res
 
 def update_tracker(obj_track, frame, itt, detection_obj, myobj_tracks, colors, godraw = False):
     obj_track.update(frame, detection_obj)

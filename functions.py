@@ -111,3 +111,36 @@ def calc_inp_outp_people(tracks_info):
             elif track_i["direction"] == 'up':
                 output_p += 1
     return {"input": input_p, "output": output_p}
+
+
+def process_filt(people_tracks):
+    max_id = max([int(idv) for idv in people_tracks.keys()])
+    max_id += 1
+    res = {}
+    max_delt = 5 # frame
+    for pk in people_tracks.keys():
+        path = people_tracks[pk]["path"]
+        frid = people_tracks[pk]["frid"]
+        bbox = people_tracks[pk]["bbox"]
+        new_path = {"path": [path[0]], "frid": [frid[0]], "bbox": [bbox[0]]}
+        for i in range(1, len(frid)):
+            if frid[i] - frid[i-1] > max_delt and len(new_path) > 1:
+                if str(pk) in res.keys():
+                    new_id = str(max_id)
+                    max_id += 1
+                else:
+                    new_id = str(pk)
+                res.update({new_id: new_path})
+                new_path = {"path": [path[i]], "frid": [frid[i]], "bbox": [bbox[i]]}
+            else:
+                new_path["path"].append(path[i])
+                new_path["frid"].append(frid[i])
+                new_path["bbox"].append(bbox[i])
+        if len(new_path) > 1:
+            if str(pk) in res.keys():
+                new_id = str(max_id)
+                max_id += 1
+            else:
+                new_id = str(pk)
+            res.update({new_id: new_path})
+    return res
