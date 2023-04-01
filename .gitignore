@@ -1,0 +1,11 @@
+.idea
+.git
+__pycache__
+venv
+best_b4e54.pt
+mars-small128.pb
+*mp4
+*rar
+*.zip
+resmetest
+track_hist
