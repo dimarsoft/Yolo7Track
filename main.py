@@ -30,7 +30,8 @@ def process_filt(people_tracks):
     for pk in people_tracks.keys():
         path = people_tracks[pk]["path"]
         frid = people_tracks[pk]["frid"]
-        new_path = [path[0]]
+        bbox = people_tracks[pk]["bbox"]
+        new_path = {"path": [path[0]], "frid": [frid[0]], "bbox": [bbox[0]]}
         for i in range(1, len(frid)):
             if frid[i] - frid[i-1] > max_delt and len(new_path) > 1:
                 if str(pk) in res.keys():
@@ -39,9 +40,11 @@ def process_filt(people_tracks):
                 else:
                     new_id = str(pk)
                 res.update({new_id: new_path})
-                new_path = [path[i]]
+                new_path = {"path": [path[i]], "frid": [frid[i]], "bbox": [bbox[i]]}
             else:
-                new_path.append(path[i])
+                new_path["path"].append(path[i])
+                new_path["frid"].append(frid[i])
+                new_path["bbox"].append(bbox[i])
         if len(new_path) > 1:
             if str(pk) in res.keys():
                 new_id = str(max_id)
@@ -50,6 +53,32 @@ def process_filt(people_tracks):
                 new_id = str(pk)
             res.update({new_id: new_path})
     return res
+
+def update_tracker(obj_track, frame, itt, detection_obj, myobj_tracks, colors, godraw = False):
+    obj_track.update(frame, detection_obj)
+    for track in obj_track.tracks:
+        bbox = track.bbox
+        x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+        track_id = track.track_id
+        if track_id in myobj_tracks.keys():
+            myobj_tracks[track_id]["path"].append(get_centrmass((x1, y1), (x2, y2)))
+            myobj_tracks[track_id]["frid"].append(itt)
+            myobj_tracks[track_id]["bbox"].append([(x1, y1), (x2, y2)])
+        else:
+            myobj_tracks.update({track_id: {
+                "path": [get_centrmass((x1, y1), (x2, y2))],
+                "bbox": [[(x1, y1), (x2, y2)]],
+                "frid": [itt]
+            }})
+        if godraw:
+            col_i = (colors[track_id % len(colors)])
+            cv2.rectangle(frame, (x1, y1), (x2, y2), col_i, 1)
+
+            cv2.circle(frame, get_centrmass((x1, y1), (x2, y2)), radius=5, color=col_i, thickness=-1)
+
+            cv2.putText(frame, f"id={track_id}", (x1, y1), cv2.FONT_HERSHEY_SIMPLEX,
+                        1, col_i, 2, cv2.LINE_AA)
+    return myobj_tracks
 
 def video_analysis(model, config, video_path, video_out_path, bound_line = []):
     colors = [(randrange(255), randrange(255), randrange(255)) for i in range(10)]
@@ -66,20 +95,28 @@ def video_analysis(model, config, video_path, video_out_path, bound_line = []):
         cap_out = None
 
     tracker_people = Tracker(config["track_model_path"])
+    helmet_people  = Tracker(config["track_model_path"])
+    vest_people    = Tracker(config["track_model_path"])
+
     itt = 0
     people_tracks = {}
+    helmet_tracks = {}
+    vest_tracks = {}
 
     while ret:
         # print(f"{itt} / {video_length}")
         itt += 1
 
-        # if itt > 30:
-        #     break
+        # if itt < 150:
+        #     ret, frame = cap.read()
+        #     continue
 
         pred, img_new = model_predict(model, frame, config["device"])
         pred = non_max_suppression(pred)
 
-        detection = []
+        detection_people = []
+        detection_helmet = []
+        detection_vest   = []
         for i, det in enumerate(pred):  # detections per image
             if len(det):
                 # Rescale boxes from img_size to im0 size
@@ -88,36 +125,20 @@ def video_analysis(model, config, video_path, video_out_path, bound_line = []):
                     x1, y1, x2, y2 = int(obj_i[0]), int(obj_i[1]), int(obj_i[2]), int(obj_i[3])
                     score, class_id = obj_i[4], int(obj_i[5])
                     if class_id == config["people_id"]:
-                        detection.append([x1, y1, x2, y2, score])
+                        detection_people.append([x1, y1, x2, y2, score])
+                    elif class_id == config["helmet_id"]:
+                        detection_helmet.append([x1, y1, x2, y2, score])
+                    elif class_id == config["vest_id"]:
+                        detection_vest.append([x1, y1, x2, y2, score])
                     # else:
                     #     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
 
-        if len(detection) > 0:
-            tracker_people.update(frame, detection)
-            for track in tracker_people.tracks:
-                bbox = track.bbox
-                x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
-                track_id = track.track_id
-
-                if track_id in people_tracks.keys():
-                    people_tracks[track_id]["path"].append(get_centrmass((x1, y1), (x2, y2)))
-                    people_tracks[track_id]["frid"].append(itt)
-                else:
-                    people_tracks.update({track_id: {
-                        "path": [get_centrmass((x1, y1), (x2, y2))],
-                        "frid": [itt]
-                    }})
-
-                col_i = (colors[track_id % len(colors)])
-                cv2.rectangle(frame, (x1, y1), (x2, y2), col_i, 1)
-
-                cv2.circle(frame, get_centrmass((x1, y1), (x2, y2)), radius=5, color=col_i, thickness=-1)
-
-                cv2.putText(frame, f"id={track_id}", (x1, y1), cv2.FONT_HERSHEY_SIMPLEX,
-                            1, col_i, 2, cv2.LINE_AA)
-        # cv2.putText(frame, f"input: {inp_people} / output: {utp_people}", (100, 100), cv2.FONT_HERSHEY_SIMPLEX,
-        #             1, (0, 0, 255), 2, cv2.LINE_AA)
-        # cv2.imwrite("frame_line.png", frame)
+        if len(detection_people) > 0:
+            people_tracks = update_tracker(tracker_people, frame, itt, detection_people, people_tracks, colors, godraw=True)
+        if len(detection_helmet) > 0:
+            helmet_tracks = update_tracker(helmet_people, frame, itt, detection_helmet, helmet_tracks, colors, godraw=True)
+        if len(detection_vest) > 0:
+            vest_tracks = update_tracker(vest_people, frame, itt, detection_vest, vest_tracks, colors, godraw=True)
         if len(bound_line) > 1:
             cv2.line(frame, *bound_line, (0, 255, 0), 3)
 
@@ -133,7 +154,7 @@ def video_analysis(model, config, video_path, video_out_path, bound_line = []):
     else:
         cap.release()
         cv2.destroyAllWindows()
-    return people_tracks
+    return people_tracks, helmet_tracks, vest_tracks
 
 def proc_analysis(camera_mass):
     for camera_num in camera_mass:
@@ -154,29 +175,24 @@ def proc_analysis(camera_mass):
             video_path = os.path.join(camera_fold, f"{fn}.mp4")
             video_out_path = os.path.join(outfold, f"{fn}_ann.mp4")
 
-            people_tracks = video_analysis(model, config, video_path, video_out_path, bound_line)
+            people_tracks, helmet_tracks, vest_tracks = video_analysis(model, config, video_path, video_out_path, bound_line)
             if len(people_tracks) == 0:
                 print(f"null_video! {fn}")
                 continue
             people_tracks = process_filt(people_tracks)
 
-            # # TODO: delete!
-            # if fn == '10':
-            #     a=2
-            # lf = os.listdir("usefix_track")
-            # if f"{fn}_people_tracks.json" in lf:
-            #     with open(os.path.join("usefix_track", f"{fn}_people_tracks.json"), 'r') as f:
-            #         people_tracks = json.load(f)
-            # else:
-            #     continue
-            if False:
-                with open(f"{fn}_people_tracks.json", "w") as f:
+            if True:
+                with open(f"{fn}_people_tracks_new.json", "w") as f:
                     json.dump(people_tracks, f, indent=4)
+                with open(f"{fn}_helmet_tracks_new.json", "w") as f:
+                    json.dump(helmet_tracks, f, indent=4)
+                with open(f"{fn}_vest_tracks_new.json", "w") as f:
+                    json.dump(vest_tracks, f, indent=4)
 
             tracks_info = []
             for p_id in people_tracks.keys():
                 people_path = people_tracks[p_id]
-                tr_info = crossing_bound(people_path, bound_line)
+                tr_info = crossing_bound(people_path['path'], bound_line)
                 tracks_info.append(tr_info)
                 print(f"{p_id}: {tr_info}")
             result = calc_inp_outp_people(tracks_info)
@@ -194,6 +210,8 @@ def mainrun(pool, cpu_count, cams):
 
     for i in range(0, col_wells - 1, step):
         list_cams.append(cams[i: i + step])
+    # list_cams = ["18"]
+    # p = proc_analysis(list_cams)
     p = pool.map(proc_analysis, list_cams)
     return p
 
@@ -203,6 +221,8 @@ config = {
         "device": "cpu",
         "GOFILE": True,
         "people_id": 0,
+        "helmet_id": 1,
+        "vest_id": 2,
         "model_path" : os.path.join("ann_mod", "best_b4e54.pt"),
         "track_model_path": os.path.join("ann_mod", "mars-small128.pb"),
         "cameras_path": os.path.join("configuration", "camera_config.json")
@@ -215,7 +235,7 @@ if __name__ == '__main__':
     full_cameras = os.listdir("data_test")
 
     cpu_count = multiprocessing.cpu_count()
-    cpu_count = max(1, cpu_count - 2)
+    cpu_count = max(3, cpu_count - 2)
     pool = multiprocessing.Pool(cpu_count)
 
     print("Strat multiprocessing")
